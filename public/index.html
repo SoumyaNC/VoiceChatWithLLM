@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Chat Assistant</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #e8ebf0;
+      padding: 20px;
+      margin: 0;
+    }
+
+    #chat-container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .chat-header {
+      background-color: #4a76a8;
+      color: white;
+      padding: 15px 20px;
+      font-size: 18px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-header .status {
+      font-size: 14px;
+      color: #cfe2f3;
+    }
+
+    #chat {
+      background-color: #f9f9fb;
+      padding: 20px;
+      height: 60vh;
+      overflow-y: auto;
+    }
+
+    .msg {
+      margin-bottom: 12px;
+      display: flex;
+    }
+
+    .user {
+      justify-content: flex-end;
+    }
+
+    .user .bubble {
+      background-color: #dcf8c6;
+      align-self: flex-end;
+    }
+
+    .agent {
+      justify-content: flex-start;
+    }
+
+    .agent .bubble {
+      background-color: #e2e2e2;
+      align-self: flex-start;
+    }
+
+    .bubble {
+      padding: 10px 14px;
+      border-radius: 10px;
+      max-width: 70%;
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+
+    #controls {
+      text-align: center;
+      padding: 15px 0;
+      background: #ffffff;
+      border-top: 1px solid #ddd;
+    }
+
+    #start, #stop {
+      padding: 10px 20px;
+      margin: 0 5px;
+      font-size: 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    #start {
+      background-color: #4caf50;
+      color: white;
+    }
+
+    #start:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    #stop {
+      background-color: #f44336;
+      color: white;
+    }
+
+    #stop:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    
+  </style>
+</head>
+<body>
+
+  <div id="chat-container">
+    <div class="chat-header">
+      Voice Chat Assistant
+      <span class="status">● Online</span>
+    </div>
+    
+    <div id="chat"></div>
+
+    <div id="controls">
+      <button id="start">🎤 Call</button>
+      <button id="stop" disabled>🔴 Drop</button>
+    </div>
+  </div>
+
+  <script>
+    const chat = document.getElementById('chat');
+    let socket, audioContext, processor, mediaStream, source;
+
+    let audioQueue = [];
+    let isPlaying = false;
+    let currentSource = null; 
+
+    function scrollToBottom() {
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function appendMessage(text, sender, typingEffect = false, callback = null) {
+      const msg = document.createElement('div');
+      msg.className = `msg ${sender}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      msg.appendChild(bubble);
+      chat.appendChild(msg);
+      scrollToBottom();
+
+      if (typingEffect) {
+        let index = 0;
+        const interval = setInterval(() => {
+          bubble.textContent += text.charAt(index);
+          index++;
+          scrollToBottom();
+          if (index >= text.length) {
+            clearInterval(interval);
+            if (callback) callback();
+          }
+        }, 30);
+      } else {
+        bubble.textContent = text;
+        if (callback) callback();
+      }
+    }
+
+    document.getElementById('start').onclick = async () => {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      socket = new WebSocket(`${protocol}//${location.host}`);
+      socket.binaryType = 'arraybuffer';
+
+      socket.onopen = async () => {
+        audioContext = new AudioContext();
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        await audioContext.audioWorklet.addModule('processor.js');
+        source = audioContext.createMediaStreamSource(mediaStream);
+        processor = new AudioWorkletNode(audioContext, 'audio-capture');
+        source.connect(processor).connect(audioContext.destination);
+
+        processor.port.onmessage = (event) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(event.data);
+          }
+        };
+
+        document.getElementById('start').disabled = true;
+        document.getElementById('stop').disabled = false;
+      };
+
+      socket.onmessage = async (event) => {
+        if (typeof event.data === 'string') {
+          const data = JSON.parse(event.data);
+          
+           
+            
+          if (data.type === 'QnA') {
+          if (data.question != '')
+          {
+            // 🛑 Stop any audio already playing 
+            if (currentSource) {
+              try {
+                currentSource.stop();
+                currentSource = null;
+                audioQueue = [];
+                isPlaying = false;
+                console.log('🛑 Previous audio stopped due to new response');
+              } catch (e) {
+                console.warn('Error stopping previous audio:', e.message);
+              }
+            }
+              appendMessage(data.question, 'user');
+          }
+            if (data.answer != '' )
+              appendMessage(data.answer, 'agent', true, () => {
+            
+            });
+          }
+
+          if (data.type === 'ConversationText' && data.role === 'user') {
+            alert(1);
+            appendMessage(data.content, 'user');
+          }
+
+          if (data.type === 'ConversationText' && data.role === 'assistant') {
+            alert(1);
+            appendMessage(data.content, 'agent');
+          }
+        } else {
+          try {
+
+
+            const buffer = event.data; // Already an ArrayBuffer
+            audioQueue.push(buffer); // Add to queue
+            playNextInQueue();       // Trigger playback if not already
+
+
+
+            // const audioBuffer = await audioContext.decodeAudioData(event.data);
+            // const sourceNode = audioContext.createBufferSource();
+            // sourceNode.buffer = audioBuffer;
+            // sourceNode.connect(audioContext.destination);
+            // sourceNode.start();
+          } catch (err) {
+            console.warn('Audio decode/playback failed:', err.message);
+          }
+        }
+      };
+
+      socket.onclose = () => {
+        appendMessage("🔌 Disconnected from assistant.", 'agent');
+        document.getElementById('start').disabled = false;
+        document.getElementById('stop').disabled = true;
+      };
+    };
+    async function playNextInQueue() {
+  if (isPlaying || audioQueue.length === 0) return;
+
+  isPlaying = true;
+  const buffer = audioQueue.shift();
+
+  try {
+    if (audioContext.state === 'suspended') {
+      await audioContext.resume();
+    }
+
+    const audioBuffer = await audioContext.decodeAudioData(buffer);
+    const source = audioContext.createBufferSource();
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 1.5;
+    currentSource = source;
+    source.buffer = audioBuffer;
+    source.connect(gainNode).connect(audioContext.destination);
+
+    source.onended = () => {
+      isPlaying = false;
+      playNextInQueue(); // Play next in line
+    };
+
+      source.start();
+    } catch (e) {
+      console.warn('Audio playback failed:', e.message);
+      isPlaying = false;
+      playNextInQueue(); // Try next
+    }
+  }
+    document.getElementById('stop').onclick = () => {
+      if (processor) processor.disconnect();
+      if (source) source.disconnect();
+      if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+      if (socket && socket.readyState === WebSocket.OPEN) socket.close();
+    };
+  </script>
+
+</body>
+</html>
