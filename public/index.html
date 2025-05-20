@@ -166,23 +166,23 @@
     }
 
     document.getElementById('start').onclick = async () => {
-      // Resume AudioContext
-      if (!audioContext || audioContext.state === 'suspended') {
-        audioContext = new AudioContext();
-        await audioContext.resume();
-      }
+      // // Resume AudioContext
+      // if (!audioContext || audioContext.state === 'suspended') {
+      //   audioContext = new AudioContext();
+      //   await audioContext.resume();
+      // }
 
-      // 🔇 Stop any TTS currently playing
-      if (currentSource) {
-        try {
-          currentSource.stop();
-          currentSource = null;
-          isPlaying = false;
-          audioQueue = []; // Optional: clear any pending audio
-        } catch (err) {
-          console.warn('Failed to stop previous audio:', err.message);
-        }
-      }
+      // // 🔇 Stop any TTS currently playing
+      // if (currentSource) {
+      //   try {
+      //     currentSource.stop();
+      //     currentSource = null;
+      //     isPlaying = false;
+      //     audioQueue = []; // Optional: clear any pending audio
+      //   } catch (err) {
+      //     console.warn('Failed to stop previous audio:', err.message);
+      //   }
+      // }
 
       // Setup WebSocket
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -191,12 +191,13 @@
 
       socket.onopen = async () => {
         audioContext = new AudioContext();
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            channelCount: 1, // ✅ Force mono
-            sampleRate: 48000
-          }
-        });
+        // mediaStream = await navigator.mediaDevices.getUserMedia({
+        //   audio: {
+        //     channelCount: 1, // ✅ Force mono
+        //     sampleRate: 48000
+        //   }
+        // });
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         console.log("🎤 Mic access granted:", mediaStream); 
         await audioContext.audioWorklet.addModule('processor.js')
         .then(() => console.log("✅ processor.js loaded"))
@@ -205,7 +206,7 @@
         source = audioContext.createMediaStreamSource(mediaStream);
         processor = new AudioWorkletNode(audioContext, 'audio-capture');
         source.connect(processor).connect(audioContext.destination);
-        socket.send('__welcome__');
+        //socket.send('__welcome__');
         processor.port.onmessage = (event) => {
             //console.log("🎙️ Received audio chunk:", event.data);
           if (socket.readyState === WebSocket.OPEN) {
