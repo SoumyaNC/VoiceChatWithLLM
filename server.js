@@ -152,7 +152,7 @@ wss.on('connection', function connection(clientSocket) {
     // 1. If Deepgram isn't open, this will be skipped.
     // 2. If the mic didn't send binary data (Int16 buffer), this won't fire.
     if (deepgramSocket.readyState === WebSocket.OPEN) {
-      console.log('📤 Forwarding audio to Deepgram:', msg.byteLength, 'bytes');
+      //console.log('📤 Forwarding audio to Deepgram:', msg.byteLength, 'bytes');
       deepgramSocket.send(msg);
     } else {
       console.warn('⚠️ Deepgram socket not ready, audio not sent.');
